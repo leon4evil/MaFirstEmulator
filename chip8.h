@@ -55,7 +55,6 @@ class chip8{
 			}
 
 
-
 		}
 
 		void loadgame(){
@@ -75,12 +74,23 @@ class chip8{
 			switch(opcode & 0xF000){ 
 				//sum cases
 
-// 0NNN	Call		Calls RCA 1802 program at address NNN. Not necessary for most ROMs.
-// 00E0	Display	disp_clear()	Clears the screen.
-// 00EE	Flow	return;	Returns from a subroutine.
-			case 0X1000:// 1NNN	Flow	goto NNN;	Jumps to address NNN.
+			case 0x0000:// 0NNN	Call	Calls RCA 1802 program at address NNN. Not necessary for most ROMs.
+				pc+=2;
+				break;
+			
+			case 0x00E0: // 00E0	Display	disp_clear()	Clears the screen.
+				//need to implement clear screen
+				pc+=2;
+				break;
+			
+			case 00EE: // 00EE	Flow	return;	Returns from a subroutine.
+				pc+=2;
+				break;
+			
+			case 0x1000:// 1NNN	Flow	goto NNN;	Jumps to address NNN.
 				pc = opcode & 0FFF;
-
+				pc+=2;
+				break;
 
 			case 0x2000: // 2NNN Flow Calls subroutine at NNN.
 				
@@ -88,26 +98,123 @@ class chip8{
 				sp++;  
 
 				pc = opcode & 0x0FFF;
+				pc+=2;
 				break;
 
-// 3XNN	Cond	if(Vx==NN)	Skips the next instruction if VX equals NN. (Usually the next instruction is a jump to skip a code block)
-// 4XNN	Cond	if(Vx!=NN)	Skips the next instruction if VX doesn't equal NN. (Usually the next instruction is a jump to skip a code block)
-// 5XY0	Cond	if(Vx==Vy)	Skips the next instruction if VX equals VY. (Usually the next instruction is a jump to skip a code block)
-// 6XNN	Const	Vx = NN	Sets VX to NN.
-// 7XNN	Const	Vx += NN	Adds NN to VX. (Carry flag is not changed)
-// 8XY0	Assign	Vx=Vy	Sets VX to the value of VY.
-// 8XY1	BitOp	Vx=Vx|Vy	Sets VX to VX or VY. (Bitwise OR operation)
+			case 0x3000// 3XNN	Cond	if(Vx==NN)	Skips the next instruction if VX equals NN. (Usually the next instruction is a jump to skip a code block)
+				
+				unsigned char X = opcode & 0x0F00;
+				X = X >> 8; // gets us 000X
+				
+				unsigned char NN = opcode & 0x00FF; //gets us NN
+
+				stack[sp] =pc;//save counter to stack
+				sp++;
+
+				if(V[X]==(NN)){
+					pc+=4; //skip next instruction
+					break;
+				}else{
+					pc+=2;
+				}
+				break;
+
+			case 0x4000:// 4XNN	Cond	if(Vx!=NN)	Skips the next instruction if VX doesn't equal NN. (Usually the next instruction is a jump to skip a code block)
+				unsigned char X = opcode & 0x0F00;
+				X = X >> 8; // gets us 000X
+
+				unsigned char NN = opcode & 0x00FF; //gets us NN
+
+				if(V[X]!=NN){
+					
+					stack[sp] =pc;//save counter to stack
+					sp++;
+
+					pc+=4; //skip next instruction
+					break;
+				}else{
+					pc+=2;
+				}
+
+				break;
+			case 0x5000:// 5XY0	Cond	if(Vx==Vy)	Skips the next instruction if VX equals VY. (Usually the next instruction is a jump to skip a code block)
+				
+				unsigned char X = opcode & 0x0F00;
+				X = X >> 8; // gets us 000X
+
+				unsigned char Y = opcode & 0x00F0;
+				Y = Y >> 4; // gets us 000Y
+
+				if(V[X]==V[Y]){
+					stack[sp] =pc;//save counter to stack
+					sp++;
+
+					pc+=4; //skip next instruction
+					break;
+				}else{
+					pc+=2;
+				}
+				break;
+				
+			case 0x6000: // 6XNN	Const	Vx = NN	Sets VX to NN.
+				unsigned short XX= opcode & 0x0F00;
+				unsigned char X = XX >> 8;
+
+				unsigned char NN = opcode & 0x00FF;
+				V[X]=NN;
+				pc+=2;
+				break;
+			case 0x7000:// 7XNN	Const	Vx += NN	Adds NN to VX. (Carry flag is not changed)
+				
+				unsigned short tempShort = opcode & 0x0F00;
+				unsigned char X = tempShort >> 8;
+
+				tempShort = opcode & 0x00FF;
+				unsigned char NN = tempShort; 
+
+				V[X] += NN;
+
+				pc+=2;
+				break;
+
+			
+			case 0x8000: // 8XY0	Assign	Vx=Vy	Sets VX to the value of VY.
+				unsigned char X = opcode >>8;
+				unsigned char Y = opcode >>4;
+
+				switch(opcode & 0x000F){
+
+					case 0x0000:  // 8XY0	Assign	Vx=Vy	Sets VX to the value of VY.
+						V[X] = V[Y];
+						pc+=2;
+						break;
+
+					case 0x0001:// 8XY1	BitOp	Vx=Vx|Vy	Sets VX to VX or VY. (Bitwise OR operation)
+
+
+						break;
+				
 // 8XY2	BitOp	Vx=Vx&Vy	Sets VX to VX and VY. (Bitwise AND operation)
 // 8XY3	BitOp	Vx=Vx^Vy	Sets VX to VX xor VY.
-// 8XY4	Math	Vx += Vy	Adds VY to VX. VF is set to 1 when there's a carry, and to 0 when there isn't.
+					case 0x0004:// 8XY4	Math	Vx += Vy	Adds VY to VX. VF is set to 1 when there's a carry, and to 0 when there isn't.
+						if(V[X]>(0xFF -V[Y])){ //if true we need carry
+							V[16]= 1;
+						}
+						else{ //no carry
+							V[16]=0;
+						}
+						
+						V[X]+=V[Y];
+						pc += 2;
+						break;
 // 8XY5	Math	Vx -= Vy	VY is subtracted from VX. VF is set to 0 when there's a borrow, and 1 when there isn't.
 // 8XY6	BitOp	Vx>>=1	Stores the least significant bit of VX in VF and then shifts VX to the right by 1.[2]
 // 8XY7	Math	Vx=Vy-Vx	Sets VX to VY minus VX. VF is set to 0 when there's a borrow, and 1 when there isn't.
 // 8XYE	BitOp	Vx<<=1	Stores the most significant bit of VX in VF and then shifts VX to the left by 1.[3]
+
+				}
+				break;
 //9XY0	Cond	if(Vx!=Vy)	Skips the next instruction if VX doesn't equal VY. (Usually the next instruction is a jump to skip a code block)
-
-
-
 
 
 				case 0xA000:  // ANNN: Sets I to the address NNN
@@ -115,13 +222,11 @@ class chip8{
  					I = opcode & 0x0FFF;
 					pc += 2;
 					break;
+				
+				case 0xB000: // BNNN	Flow	PC=V0+NNN	Jumps to the address NNN plus V0.
+					pc = (opcode & 0x0FFF) +V[0];
+					break;
 
-				//sum more cases
-
-				// BNNN	Flow	PC=V0+NNN	Jumps to the address NNN plus V0.
-				case 0xB000:
-				pc = (opcode & 0x0FFF) +V[0];
-				break;
 // CXNN	Rand	Vx=rand()&NN	Sets VX to the result of a bitwise and operation on a random number (Typically: 0 to 255) and NN.
 // DXYN	Disp	draw(Vx,Vy,N)	Draws a sprite at coordinate (VX, VY) that has a width of 8 pixels and a height of N pixels. Each row of 8 pixels is read as bit-coded starting from memory location I; I value doesn’t change after the execution of this instruction. As described above, VF is set to 1 if any screen pixels are flipped from set to unset when the sprite is drawn, and to 0 if that doesn’t happen
 // EX9E	KeyOp	if(key()==Vx)	Skips the next instruction if the key stored in VX is pressed. (Usually the next instruction is a jump to skip a code block)
